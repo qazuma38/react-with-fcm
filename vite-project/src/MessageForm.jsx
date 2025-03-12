@@ -19,21 +19,20 @@ import {
   getToken, 
   onMessage 
 } from 'firebase/messaging';
-import axios from 'axios';
 
 // Firebase設定
 const firebaseConfig = {
-    apiKey: "AIzaSyCR22RHLoJf9RvBs2l0my8mPfIq6YkG2lQ",
-    authDomain: "reactnotificationtest-309aa.firebaseapp.com",
-    projectId: "reactnotificationtest-309aa",
-    storageBucket: "reactnotificationtest-309aa.firebasestorage.app",
-    messagingSenderId: "914087282514",
-    appId: "1:914087282514:web:d5e2fe2d125fea61459c8b"
+  apiKey: "AIzaSyCR22RHLoJf9RvBs2l0my8mPfIq6YkG2lQ",
+  authDomain: "reactnotificationtest-309aa.firebaseapp.com",
+  projectId: "reactnotificationtest-309aa",
+  storageBucket: "reactnotificationtest-309aa.firebasestorage.app",
+  messagingSenderId: "914087282514",
+  appId: "1:914087282514:web:d5e2fe2d125fea61459c8b"
 };
 
 // Google App Script ウェブアプリのURL
 // CORS対応のプロキシを使用
-const GAS_WEBAPP_URL = 'https://cors-anywhere.herokuapp.com/https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyp9SBtFJuPija45FB2rffvUs_Y6SIw9DhB6DRWzSGRL5bH4dz9Q9e5CFuCEAr2O3_ybg/exec';
 // または
 // const GAS_WEBAPP_URL = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec');
 
@@ -151,9 +150,11 @@ const setupNotificationListener = () => {
 };
 
 // メッセージ送信機能を持つコンポーネント
-function MessageForm({ currentUserId, targetUserId }) {
+function MessageForm({ initialCurrentUserId, initialTargetUserId }) {
   const [message, setMessage] = useState('');
   const [notificationStatus, setNotificationStatus] = useState('unknown'); // 'unknown', 'granted', 'denied', 'default'
+  const [currentUserId, setCurrentUserId] = useState(initialCurrentUserId || '');
+  const [targetUserId, setTargetUserId] = useState(initialTargetUserId || '');
   
   // コンポーネント初期化時に通知ステータスを確認
   useEffect(() => {
@@ -162,7 +163,7 @@ function MessageForm({ currentUserId, targetUserId }) {
     
     // 現在の通知許可状態を確認
     checkNotificationPermission();
-  }, [currentUserId]);
+  }, []);
   
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -209,7 +210,7 @@ function MessageForm({ currentUserId, targetUserId }) {
   const triggerNotification = async (messageId, senderId, receiverId, messageText) => {
     try {
       // Google App ScriptのエンドポイントURL
-      const gasUrl = 'https://script.google.com/macros/s/AKfycbylx8uraf1gs0ihGZXg7uE_OqQPnwu_w9mh-B3yWUyMVU8NUcuuNhlSfE_bA17D6aty/exec';
+      const gasUrl = 'https://script.google.com/macros/s/AKfycbyp9SBtFJuPija45FB2rffvUs_Y6SIw9DhB6DRWzSGRL5bH4dz9Q9e5CFuCEAr2O3_ybg/exec';
       
       // text/plain形式でリクエストを送信する
       const response = await fetch(gasUrl, {
@@ -257,6 +258,12 @@ function MessageForm({ currentUserId, targetUserId }) {
   
   // 通知許可をリクエストするハンドラ
   const handleRequestNotification = async () => {
+    // ユーザーIDが入力されているか確認
+    if (!currentUserId.trim()) {
+      alert('ユーザーIDを入力してください');
+      return;
+    }
+    
     try {
       // 通知許可をリクエストしてFCMトークンを保存
       const result = await requestNotificationPermissionAndSaveToken(currentUserId);
@@ -265,6 +272,19 @@ function MessageForm({ currentUserId, targetUserId }) {
       if (result) {
         setNotificationStatus('granted');
         alert('通知が許可されました。メッセージ受信時に通知が表示されます。');
+        
+        // ユーザー情報をFirestoreに保存
+        try {
+          await setDoc(doc(db, 'users', currentUserId), {
+            userId: currentUserId,
+            lastActive: serverTimestamp(),
+            notificationEnabled: true
+          }, { merge: true }); // 既存のデータがある場合はマージ
+          
+          console.log('ユーザー情報を保存しました:', currentUserId);
+        } catch (userError) {
+          console.error('ユーザー情報の保存に失敗しました:', userError);
+        }
       } else {
         // 許可されなかった場合は現在の状態を再確認
         const currentPermission = await checkNotificationPermission();
@@ -312,21 +332,59 @@ function MessageForm({ currentUserId, targetUserId }) {
 
   return (
     <div>
-      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-        <button
-          type="button"
-          onClick={handleRequestNotification}
-          style={{
-            padding: '8px 16px',
-            borderRadius: '4px',
-            border: 'none',
-            cursor: 'pointer',
-            ...notificationBtnProps.style
-          }}
-          disabled={notificationBtnProps.disabled}
-        >
-          {notificationBtnProps.label}
-        </button>
+      <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '5px' }}>
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+            あなたのユーザーID:
+          </label>
+          <input
+            type="text"
+            value={currentUserId}
+            onChange={(e) => setCurrentUserId(e.target.value)}
+            placeholder="あなたのユーザーIDを入力"
+            style={{ 
+              width: '100%',
+              padding: '8px', 
+              borderRadius: '4px',
+              border: '1px solid #ccc'
+            }}
+          />
+        </div>
+        
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+            送信先ユーザーID:
+          </label>
+          <input
+            type="text"
+            value={targetUserId}
+            onChange={(e) => setTargetUserId(e.target.value)}
+            placeholder="送信先ユーザーIDを入力"
+            style={{ 
+              width: '100%',
+              padding: '8px', 
+              borderRadius: '4px',
+              border: '1px solid #ccc'
+            }}
+          />
+        </div>
+        
+        <div style={{ textAlign: 'right' }}>
+          <button
+            type="button"
+            onClick={handleRequestNotification}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '4px',
+              border: 'none',
+              cursor: 'pointer',
+              ...notificationBtnProps.style
+            }}
+            disabled={notificationBtnProps.disabled || !currentUserId.trim()}
+          >
+            {notificationBtnProps.label}
+          </button>
+        </div>
       </div>
       
       <form onSubmit={sendMessage}>
@@ -353,6 +411,7 @@ function MessageForm({ currentUserId, targetUserId }) {
             marginLeft: '10px',
             cursor: 'pointer'
           }}
+          disabled={!currentUserId.trim() || !targetUserId.trim()}
         >
           送信
         </button>

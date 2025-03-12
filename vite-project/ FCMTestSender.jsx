@@ -7,7 +7,7 @@ function FCMTestSender() {
   const [status, setStatus] = useState('');
   
   // GASのウェブアプリURLを設定
-  const GAS_ENDPOINT = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+  const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyp9SBtFJuPija45FB2rffvUs_Y6SIw9DhB6DRWzSGRL5bH4dz9Q9e5CFuCEAr2O3_ybg/exec';
 
   // テキストデータ形式でJSONを送信する関数
   const handleSubmit = async (e) => {
